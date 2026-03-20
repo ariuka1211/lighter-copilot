@@ -1,7 +1,8 @@
 """Quick test of the trailing TP/SL logic (no API needed)."""
 
 import sys
-sys.path.insert(0, ".")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from bot import BotConfig, PositionTracker
 
