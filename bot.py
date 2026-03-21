@@ -35,7 +35,7 @@ from dsl import DSLConfig, DSLState, DSLTier, evaluate_dsl
 # ── AI Trader DB (for outcome logging) ──────────────────────────────
 
 # Configurable via env var; also settable in config.yml (ai_trader_dir).
-_AI_TRADER_DIR = os.environ.get("AI_TRADER_DIR", str(Path(__file__).parent.parent / "lighter-bot" / "ai-trader"))
+_AI_TRADER_DIR = os.environ.get("AI_TRADER_DIR", str(Path(__file__).parent.parent / "signals" / "ai-trader"))
 if _AI_TRADER_DIR not in sys.path:
     sys.path.insert(0, _AI_TRADER_DIR)
 
@@ -76,10 +76,10 @@ class BotConfig:
 
     # AI Autopilot mode
     ai_mode: bool = False
-    ai_decision_file: str = "../lighter-bot/ai-decision.json"
-    ai_result_file: str = "../lighter-bot/ai-result.json"
-    ai_trader_dir: str = "../lighter-bot/ai-trader"
-    signals_file: str = "../lighter-bot/signals.json"
+    ai_decision_file: str = "../signals/ai-decision.json"
+    ai_result_file: str = "../signals/ai-result.json"
+    ai_trader_dir: str = "../signals/ai-trader"
+    signals_file: str = "../signals/signals.json"
 
     # DSL (Dynamic Stop Loss)
     dsl_enabled: bool = True
@@ -1623,4 +1623,6 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+
     main()

@@ -22,7 +22,7 @@ For SHORT positions, same logic inverted.
 ## Setup
 
 ```bash
-cd lighter-copilot
+cd executor
 pip install -r requirements.txt
 cp config.example.yml config.yml
 # Edit config.yml with your Lighter credentials + Telegram token

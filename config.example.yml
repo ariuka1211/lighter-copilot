@@ -48,10 +48,10 @@ price_poll_interval: 5          # seconds between price checks
 price_call_delay: 5.0           # seconds between sequential get_price() calls within loops
 
 # Signal integration
-signals_file: "../lighter-bot/signals.json"
+signals_file: "../signals/signals.json"
 
 # AI Autopilot mode
 ai_mode: true
-ai_decision_file: "../lighter-bot/ai-decision.json"
-ai_result_file: "../lighter-bot/ai-result.json"
-ai_trader_dir: "../lighter-bot/ai-trader"
+ai_decision_file: "../signals/ai-decision.json"
+ai_result_file: "../signals/ai-result.json"
+ai_trader_dir: "../signals/ai-trader"
