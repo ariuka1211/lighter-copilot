@@ -580,16 +580,22 @@ class LighterAPI:
         return self._client_order_index % (2**32)
 
     async def get_price(self, market_id: int) -> float | None:
-        """Get latest price for a market from recent trades."""
-        try:
-            await self._ensure_client()
-            trades = await self._order_api.recent_trades(market_id=market_id, limit=1)
-            if trades.trades:
-                return float(trades.trades[0].price)
-            return None
-        except Exception as e:
-            logging.error(f"Failed to get price for market {market_id}: {e}")
-            return None
+        """Get latest price for a market from recent trades. Retries up to 3 times on failure."""
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                await self._ensure_client()
+                trades = await self._order_api.recent_trades(market_id=market_id, limit=1)
+                if trades.trades:
+                    return float(trades.trades[0].price)
+                return None
+            except Exception as e:
+                if attempt < max_retries:
+                    logging.warning(f"get_price(market={market_id}) attempt {attempt}/{max_retries} failed: {e} — retrying in 1s")
+                    await asyncio.sleep(1)
+                else:
+                    logging.error(f"Failed to get price for market {market_id} after {max_retries} attempts: {e}")
+        return None
 
     async def get_all_prices(self) -> dict[int, float]:
         """Get prices for all tracked position markets."""
@@ -635,7 +641,7 @@ class LighterAPI:
             size_dec, price_dec = await self._ensure_decimals(market_id)
             base_amount = self._to_lighter_amount(size, size_dec)
             price = self._to_lighter_amount(trigger_price, price_dec)
-            tx = await self._signer.create_tp_order(
+            result = await self._signer.create_tp_order(
                 market_index=market_id,
                 client_order_index=self._next_client_order_index(),
                 base_amount=base_amount,
@@ -644,7 +650,26 @@ class LighterAPI:
                 is_ask=is_long,      # close long = sell = ask
                 reduce_only=True,
             )
-            logging.info(f"✅ TP order submitted: {tx}")
+            # SDK returns Union[Tuple[CreateOrder, RespSendTx, None], Tuple[None, None, str]]
+            if isinstance(result, tuple):
+                if len(result) >= 3 and result[2] is not None:
+                    logging.error(f"❌ TP order rejected by exchange: {result[2]}")
+                    return False
+                if result[0] is None:
+                    logging.error("❌ TP order returned None (no order created)")
+                    return False
+                # Log response details
+                tx = result[0]
+                resp = result[1] if len(result) > 1 else None
+                if resp is not None:
+                    resp_code = getattr(resp, 'code', None)
+                    resp_msg = getattr(resp, 'msg', None) or getattr(resp, 'message', None)
+                    logging.info(f"✅ TP order submitted: tx={tx}, resp_code={resp_code}, resp_msg={resp_msg}")
+                else:
+                    logging.info(f"✅ TP order submitted: {tx}")
+                return True
+            # Fallback: if SDK returns something unexpected, treat as success with warning
+            logging.warning(f"⚠️ TP order unexpected return type: {type(result)} — {result}")
             return True
         except Exception as e:
             logging.error(f"Failed to execute TP: {e}")
@@ -665,14 +690,31 @@ class LighterAPI:
             else:
                 worst_price = best_price_int - slippage  # sell: accept lower price
 
-            tx = await self._signer.create_market_order(
+            result = await self._signer.create_market_order(
                 market_index=market_id,
                 client_order_index=self._next_client_order_index(),
                 base_amount=base_amount,
                 avg_execution_price=worst_price,
                 is_ask=not is_long,   # buy = not ask (long), sell = ask (short)
             )
-            logging.info(f"✅ Position opened: {'LONG' if is_long else 'SHORT'} {size_usd:.2f} USD -> {tx}")
+            # SDK returns Union[Tuple[CreateOrder, RespSendTx, None], Tuple[None, None, str]]
+            if isinstance(result, tuple):
+                if len(result) >= 3 and result[2] is not None:
+                    logging.error(f"❌ Open order rejected by exchange: {result[2]}")
+                    return False
+                if result[0] is None:
+                    logging.error("❌ Open order returned None (no order created)")
+                    return False
+                tx = result[0]
+                resp = result[1] if len(result) > 1 else None
+                if resp is not None:
+                    resp_code = getattr(resp, 'code', None)
+                    resp_msg = getattr(resp, 'msg', None) or getattr(resp, 'message', None)
+                    logging.info(f"✅ Position opened: {'LONG' if is_long else 'SHORT'} {size_usd:.2f} USD -> tx={tx}, resp_code={resp_code}, resp_msg={resp_msg}")
+                else:
+                    logging.info(f"✅ Position opened: {'LONG' if is_long else 'SHORT'} {size_usd:.2f} USD -> {tx}")
+                return True
+            logging.warning(f"⚠️ Open order unexpected return type: {type(result)} — {result}")
             return True
         except Exception as e:
             logging.error(f"Failed to open position: {e}")
@@ -696,7 +738,7 @@ class LighterAPI:
                 # closing short = buy, worst case is higher price
                 worst_price = best_price_int + slippage
 
-            tx = await self._signer.create_market_order(
+            result = await self._signer.create_market_order(
                 market_index=market_id,
                 client_order_index=self._next_client_order_index(),
                 base_amount=base_amount,
@@ -704,7 +746,26 @@ class LighterAPI:
                 is_ask=is_long,      # close long = sell = ask
                 reduce_only=True,
             )
-            logging.info(f"✅ SL market order submitted: {tx}")
+            # SDK returns Union[Tuple[CreateOrder, RespSendTx, None], Tuple[None, None, str]]
+            if isinstance(result, tuple):
+                if len(result) >= 3 and result[2] is not None:
+                    logging.error(f"❌ SL order rejected by exchange: {result[2]}")
+                    return False
+                if result[0] is None:
+                    logging.error("❌ SL order returned None (no order created)")
+                    return False
+                # Log response details
+                tx = result[0]
+                resp = result[1] if len(result) > 1 else None
+                if resp is not None:
+                    resp_code = getattr(resp, 'code', None)
+                    resp_msg = getattr(resp, 'msg', None) or getattr(resp, 'message', None)
+                    logging.info(f"✅ SL market order submitted: tx={tx}, resp_code={resp_code}, resp_msg={resp_msg}")
+                else:
+                    logging.info(f"✅ SL market order submitted: {tx}")
+                return True
+            # Fallback: if SDK returns something unexpected, treat as success with warning
+            logging.warning(f"⚠️ SL order unexpected return type: {type(result)} — {result}")
             return True
         except Exception as e:
             logging.error(f"Failed to execute SL: {e}")
@@ -1398,6 +1459,8 @@ class LighterCopilot:
                 self.tracker.remove_position(mid)
 
         # 1.5. Process signals — AI mode or rule-based
+        # NOTE: Moved AFTER position sync/confirmation so tracker is populated
+        # before close_all or other AI decisions execute.
         if self._ai_mode:
             await self._process_ai_decision()
         else:
